@@ -695,6 +695,149 @@
             color: #64748b;
             margin-top: 5px;
         }
+        
+        /* Test Step Wizard Enhancement */
+        .test-wizard-container {
+            position: relative;
+            min-height: 400px;
+        }
+        
+        .test-wizard-progress {
+            margin-bottom: 30px;
+        }
+        
+        .test-wizard-step {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .test-wizard-step.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+        
+        .step-indicator-item {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 500;
+            color: #9e9e9e;
+            position: relative;
+            z-index: 1;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .step-indicator-item.completed {
+            background: #4caf50;
+            border-color: #4caf50;
+            color: white;
+        }
+        
+       .step-indicator-item.active {
+            background: #2196f3;
+            border-color: #2196f3;
+            color: white;
+            transform: scale(1.2);
+            animation: pulse 1s infinite;
+        }
+        
+     .step-indicator-item.error {
+            background: #f44336;
+            border-color: #f44336;
+            color: white;
+        }
+        
+     @keyframes pulse {
+            0% { transform: scale(1.2); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1.2); }
+        }
+        
+        .wizard-navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .step-validation-message {
+            background: #fff3e0;
+            border: 1px solid #ffb74d;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+            color: #e65100;
+        }
+        
+        .step-validation-message.error {
+            display: block;
+            background: #ffebee;
+            border-color: #f44336;
+            color: #c62828;
+        }
+        
+        .step-validation-message i {
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        
+        /* Enhanced personnel section for wizard mode */
+        .personnel-step {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .personnel-step h5 {
+            margin-bottom: 30px;
+        }
+        
+        /* Step summary card */
+        .step-summary {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .step-summary.completed {
+            border-left-color: #4caf50;
+        }
+        
+        .step-summary.failed {
+            border-left-color: #f44336;
+        }
     </style>
     
     <!-- Remove old Google API Client and add new Google Identity Services -->
@@ -855,6 +998,14 @@
     <div id="testModal" class="modal modal-fixed-footer" style="width: 80%; max-width: 1000px;">
         <div class="modal-content">
             <h4 id="testProcedureName"></h4>
+            <div class="switch" style="margin-bottom: 20px;">
+                <label>
+                    Classic View
+                    <input type="checkbox" id="wizardModeToggle" checked>
+                    <span class="lever"></span>
+                    Step-by-Step Mode
+                </label>
+            </div>
             <div id="testContent"></div>
         </div>
         <div class="modal-footer">
@@ -922,6 +1073,8 @@
         let currentTest = null;
         let testResults = {};
         let currentImageZoom = 1;
+        let currentWizardStep = 0;
+        let wizardMode = true;
 
         // Initialize when DOM is loaded - ONLY ONCE
         document.addEventListener('DOMContentLoaded', function() {
@@ -1852,54 +2005,251 @@
                 return;
             }
             
-            // Initialize test results with personnel arrays
-            testResults = {
-                assetId: currentAsset.id,
-                procedureId: currentTest.id,
-                date: new Date().toLocaleDateString('en-GB'),
-                technicians: [],
-                contractors: [],
-                steps: {},
-                notes: '',
-                timestamp: new Date().toISOString()
-            };
+            // Check for saved progress
+            const progressLoaded = loadTestProgress();
+            
+            if (!progressLoaded) {
+                // Initialize test results with personnel arrays
+                testResults = {
+                    assetId: currentAsset.id,
+                    procedureId: currentTest.id,
+                    date: new Date().toLocaleDateString('en-GB'),
+                    technicians: [],
+                    contractors: [],
+                    steps: {},
+                    notes: '',
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Reset wizard step
+                currentWizardStep = 0;
+            }
             
             // Update modal content
             document.getElementById('testProcedureName').textContent = currentTest.name;
             
+            // Setup wizard mode toggle
+            const wizardToggle = document.getElementById('wizardModeToggle');
+            wizardToggle.checked = wizardMode;
+            wizardToggle.addEventListener('change', function() {
+                wizardMode = this.checked;
+                renderTestContent();
+            });
+            
+            renderTestContent();
+            
+            // Close asset modal
+            const assetModal = M.Modal.getInstance(document.getElementById('assetModal'));
+            assetModal.close();
+            
+            // Open test modal after a short delay
+            setTimeout(() => {
+                const testModal = M.Modal.getInstance(document.getElementById('testModal'));
+                testModal.open();
+            }, 300);
+        }
+
+        function renderTestContent() {
             const content = document.getElementById('testContent');
-            content.innerHTML = `
+            
+            if (wizardMode) {
+                renderWizardMode(content);
+            } else {
+                renderClassicMode(content);
+            }
+            
+            // Re-initialize Materialize components
+            setTimeout(() => {
+                initializeMaterializeComponents();
+            }, 100);
+        }
+
+        function renderWizardMode(container) {
+            const totalSteps = currentTest.steps.length + 2; // +1 for personnel, +1 for summary
+            
+            container.innerHTML = `
+                <div class="test-wizard-container">
+                    <div class="test-wizard-progress">
+                        <div class="step-indicator">
+                            <div class="step-indicator-item ${currentWizardStep === 0 ? 'active' : ''}" onclick="goToStep(0)">
+                                <i class="material-icons tiny">people</i>
+                            </div>
+                            ${currentTest.steps.map((step, index) => `
+                                <div class="step-indicator-item ${currentWizardStep === index + 1 ? 'active' : ''} ${getStepStatus(step.stepNumber)}" 
+                                     onclick="goToStep(${index + 1})" 
+                                     title="Step ${step.stepNumber}">
+                                    ${step.stepNumber}
+                                </div>
+                            `).join('')}
+                            <div class="step-indicator-item ${currentWizardStep === totalSteps - 1 ? 'active' : ''}" onclick="goToStep(${totalSteps - 1})">
+                                <i class="material-icons tiny">check</i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="step-validation-message" id="stepValidationMessage">
+                        <i class="material-icons tiny">warning</i>
+                        <span id="validationText"></span>
+                    </div>
+                    
+                    <!-- Personnel Step -->
+                    <div class="test-wizard-step ${currentWizardStep === 0 ? 'active' : ''}">
+                        <div class="personnel-step">
+                            <h5>Test Personnel</h5>
+                            <p>Please enter at least one technician or contractor who will perform this test.</p>
+                            <div class="personnel-grid">
+                                <div>
+                                    <h6>Technicians</h6>
+                                    <div class="input-field">
+                                        <input id="technician1" type="text" onchange="updatePersonnel()">
+                                        <label for="technician1">Technician 1</label>
+                                    </div>
+                                    <div class="input-field">
+                                        <input id="technician2" type="text" onchange="updatePersonnel()">
+                                        <label for="technician2">Technician 2</label>
+                                    </div>
+                                    <div class="input-field">
+                                        <input id="technician3" type="text" onchange="updatePersonnel()">
+                                        <label for="technician3">Technician 3</label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h6>Contractors</h6>
+                                    <div class="input-field">
+                                        <input id="contractor1" type="text" onchange="updatePersonnel()">
+                                        <label for="contractor1">Contractor 1</label>
+                                    </div>
+                                    <div class="input-field">
+                                        <input id="contractor2" type="text" onchange="updatePersonnel()">
+                                        <label for="contractor2">Contractor 2</label>
+                                    </div>
+                                    <div class="input-field">
+                                        <input id="contractor3" type="text" onchange="updatePersonnel()">
+                                        <label for="contractor3">Contractor 3</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                                             </div>
+                    
+                    <!-- Test Steps -->
+                    ${currentTest.steps.map((step, index) => `
+                        <div class="test-wizard-step ${currentWizardStep === index + 1 ? 'active' : ''}">
+                            <div class="test-step" id="step-${step.stepNumber}">
+                                <h5>Step ${step.stepNumber} of ${currentTest.steps.length}</h5>
+                                <h6>${step.description}</h6>
+                                ${step.warningNotes ? `<div class="card-panel amber lighten-4"><i class="material-icons tiny">warning</i> ${step.warningNotes}</div>` : ''}
+                                <p><strong>Expected Result:</strong> ${step.expectedResult}</p>
+                                ${step.imageUrl ? `
+                                    <div style="margin: 10px 0;">
+                                        <a href="#!" onclick="event.preventDefault(); showImage('${step.imageUrl}')" class="btn-small waves-effect waves-light">
+                                            <i class="material-icons left">image</i>View Example
+                                        </a>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="test-step-controls">
+                                    <div class="test-step-performer">
+                                        <div class="input-field">
+                                            <select id="step-${step.stepNumber}-performer" onchange="updateStepPerformer(${step.stepNumber}, this.value)">
+                                                <option value="">Select who performed this step</option>
+                                            </select>
+                                            <label>Performed By</label>
+                                        </div>
+                                        <div class="step-timestamp" id="step-${step.stepNumber}-timestamp"></div>
+                                    </div>
+                                    <div class="test-step-result">
+                                        <p>
+                                            <label>
+                                                <input name="step-${step.stepNumber}-result" type="radio" value="pass" onchange="updateStepResult(${step.stepNumber}, 'pass')">
+                                                <span>Pass</span>
+                                            </label>
+                                        </p>
+                                        <p>
+                                            <label>
+                                                <input name="step-${step.stepNumber}-result" type="radio" value="fail" onchange="updateStepResult(${step.stepNumber}, 'fail')">
+                                                <span>Fail</span>
+                                            </label>
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div class="input-field">
+                                    <textarea id="step-${step.stepNumber}-notes" class="materialize-textarea" onchange="updateStepNotes(${step.stepNumber}, this.value)"></textarea>
+                                    <label for="step-${step.stepNumber}-notes">Notes (Optional)</label>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    <!-- Summary Step -->
+                    <div class="test-wizard-step ${currentWizardStep === totalSteps - 1 ? 'active' : ''}">
+                        <h5>Test Summary</h5>
+                        <div id="wizardSummary"></div>
+                        <div class="input-field">
+                            <textarea id="overallNotes" class="materialize-textarea" onchange="testResults.notes = this.value"></textarea>
+                            <label for="overallNotes">Overall Notes</label>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-navigation">
+                        <button class="btn-flat waves-effect" onclick="previousStep()" ${currentWizardStep === 0 ? 'disabled' : ''}>
+                            <i class="material-icons left">arrow_back</i>Previous
+                        </button>
+                        <button class="btn waves-effect waves-light" onclick="nextStep()" id="nextStepBtn">
+                            Next<i class="material-icons right">arrow_forward</i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Update personnel dropdowns if we're past the first step
+            if (currentWizardStep > 0) {
+                updatePersonnelDropdowns();
+            }
+            
+            // Update summary if on last step
+            if (currentWizardStep === totalSteps - 1) {
+                updateWizardSummary();
+            }
+            
+            // Restore previous values
+            restoreStepValues();
+        }
+
+        function renderClassicMode(container) {
+            container.innerHTML = `
                 <div class="personnel-section">
                     <h5>Test Personnel</h5>
                     <div class="personnel-grid">
                         <div>
                             <h6>Technicians (up to 3)</h6>
                             <div class="input-field">
-                                <input id="technician1" type="text" onchange="updatePersonnel()">
-                                <label for="technician1">Technician 1</label>
+                                <input id="technician1" type="text" onchange="updatePersonnel()" value="${testResults.technicians[0] || ''}">
+                                <label for="technician1" ${testResults.technicians[0] ? 'class="active"' : ''}>Technician 1</label>
                             </div>
                             <div class="input-field">
-                                <input id="technician2" type="text" onchange="updatePersonnel()">
-                                <label for="technician2">Technician 2</label>
+                                <input id="technician2" type="text" onchange="updatePersonnel()" value="${testResults.technicians[1] || ''}">
+                                <label for="technician2" ${testResults.technicians[1] ? 'class="active"' : ''}>Technician 2</label>
                             </div>
                             <div class="input-field">
-                                <input id="technician3" type="text" onchange="updatePersonnel()">
-                                <label for="technician3">Technician 3</label>
+                                <input id="technician3" type="text" onchange="updatePersonnel()" value="${testResults.technicians[2] || ''}">
+                                <label for="technician3" ${testResults.technicians[2] ? 'class="active"' : ''}>Technician 3</label>
                             </div>
                         </div>
                         <div>
                             <h6>Contractors (up to 3)</h6>
                             <div class="input-field">
-                                <input id="contractor1" type="text" onchange="updatePersonnel()">
-                                <label for="contractor1">Contractor 1</label>
+                                <input id="contractor1" type="text" onchange="updatePersonnel()" value="${testResults.contractors[0] || ''}">
+                                <label for="contractor1" ${testResults.contractors[0] ? 'class="active"' : ''}>Contractor 1</label>
                             </div>
                             <div class="input-field">
-                                <input id="contractor2" type="text" onchange="updatePersonnel()">
-                                <label for="contractor2">Contractor 2</label>
+                                <input id="contractor2" type="text" onchange="updatePersonnel()" value="${testResults.contractors[1] || ''}">
+                                <label for="contractor2" ${testResults.contractors[1] ? 'class="active"' : ''}>Contractor 2</label>
                             </div>
                             <div class="input-field">
-                                <input id="contractor3" type="text" onchange="updatePersonnel()">
-                                <label for="contractor3">Contractor 3</label>
+                                <input id="contractor3" type="text" onchange="updatePersonnel()" value="${testResults.contractors[2] || ''}">
+                                <label for="contractor3" ${testResults.contractors[2] ? 'class="active"' : ''}>Contractor 3</label>
                             </div>
                         </div>
                     </div>
@@ -1907,7 +2257,7 @@
                 
                 <h5>Test Steps</h5>
                 ${currentTest.steps.sort((a, b) => a.stepNumber - b.stepNumber).map(step => `
-                    <div class="test-step" id="step-${step.stepNumber}">
+                    <div class="test-step ${getStepClass(step.stepNumber)}" id="step-${step.stepNumber}">
                         <h6>Step ${step.stepNumber}: ${step.description}</h6>
                         ${step.warningNotes ? `<div class="card-panel amber lighten-4"><i class="material-icons tiny">warning</i> ${step.warningNotes}</div>` : ''}
                         <p><strong>Expected Result:</strong> ${step.expectedResult}</p>
@@ -1922,7 +2272,7 @@
                         <div class="test-step-controls">
                             <div class="test-step-performer">
                                 <div class="input-field">
-                                    <select id="step-${step.stepNumber}-performer" onchange="updateStepPerformer(${step.stepNumber}, this.value)" disabled>
+                                    <select id="step-${step.stepNumber}-performer" onchange="updateStepPerformer(${step.stepNumber}, this.value)">
                                         <option value="">Select who performed this step</option>
                                     </select>
                                     <label>Performed By</label>
@@ -1946,36 +2296,526 @@
                         </div>
                         
                         <div class="input-field">
-                            <textarea id="step-${step.stepNumber}-notes" class="materialize-textarea" onchange="updateStepNotes(${step.stepNumber}, this.value)"></textarea>
-                            <label for="step-${step.stepNumber}-notes">Notes (Optional)</label>
+                            <textarea id="step-${step.stepNumber}-notes" class="materialize-textarea" onchange="updateStepNotes(${step.stepNumber}, this.value)">${testResults.steps[step.stepNumber]?.notes || ''}</textarea>
+                            <label for="step-${step.stepNumber}-notes" ${testResults.steps[step.stepNumber]?.notes ? 'class="active"' : ''}>Notes (Optional)</label>
                         </div>
                     </div>
                 `).join('')}
                 
                 <div class="row">
                     <div class="input-field col s12">
-                        <textarea id="overallNotes" class="materialize-textarea" onchange="testResults.notes = this.value"></textarea>
-                        <label for="overallNotes">Overall Notes</label>
+                        <textarea id="overallNotes" class="materialize-textarea" onchange="testResults.notes = this.value">${testResults.notes || ''}</textarea>
+                        <label for="overallNotes" ${testResults.notes ? 'class="active"' : ''}>Overall Notes</label>
                     </div>
                 </div>
             `;
             
-            // Re-initialize Materialize components
-            setTimeout(() => {
-                // Fix for textareaAutoResize error
-                const textareas = document.querySelectorAll('.materialize-textarea');
-                textareas.forEach(textarea => {
-                    try {
-                        M.textareaAutoResize(textarea);
-                    } catch (e) {
-                        // Fallback if textareaAutoResize fails
-                        textarea.style.height = 'auto';
-                        textarea.style.overflow = 'hidden';
+            // Update all dropdowns
+            updatePersonnelDropdowns();
+            
+            // Restore all step values
+            restoreAllStepValues();
+        }
+
+        function getStepClass(stepNumber) {
+            const stepData = testResults.steps[stepNumber];
+            if (stepData?.result === 'pass') return 'completed';
+            if (stepData?.result === 'fail') return 'failed';
+            return '';
+        }
+
+        function getStepStatus(stepNumber) {
+            const stepData = testResults.steps[stepNumber];
+            if (stepData?.result === 'pass') return 'completed';
+            if (stepData?.result === 'fail') return 'error';
+            return '';
+        }
+
+        function validateCurrentStep() {
+            const totalSteps = currentTest.steps.length + 2;
+            
+            if (currentWizardStep === 0) {
+                // Validate personnel
+                if (testResults.technicians.length === 0 && testResults.contractors.length === 0) {
+                    showValidationMessage('Please enter at least one technician or contractor before proceeding.');
+                    return false;
+                }
+            } else if (currentWizardStep < totalSteps - 1) {
+                // Validate test step
+                const step = currentTest.steps[currentWizardStep - 1];
+                const stepData = testResults.steps[step.stepNumber];
+                
+                if (!stepData || !stepData.result) {
+                    showValidationMessage('Please select Pass or Fail for this step.');
+                    return false;
+                }
+                
+                if (!stepData.performer || stepData.performer === '') {
+                    showValidationMessage('Please select who performed this step.');
+                    return false;
+                }
+            }
+            
+            hideValidationMessage();
+            return true;
+        }
+
+        function showValidationMessage(message) {
+            const validationEl = document.getElementById('stepValidationMessage');
+            const textEl = document.getElementById('validationText');
+            
+            if (validationEl && textEl) {
+                textEl.textContent = message;
+                validationEl.classList.add('error');
+            }
+        }
+
+        function hideValidationMessage() {
+            const validationEl = document.getElementById('stepValidationMessage');
+            if (validationEl) {
+                validationEl.classList.remove('error');
+            }
+        }
+
+        function nextStep() {
+            const totalSteps = currentTest.steps.length + 2;
+            
+            if (!validateCurrentStep()) {
+                M.toast({html: 'Please complete the current step before proceeding.', classes: 'orange'});
+                return;
+            }
+            
+            if (currentWizardStep < totalSteps - 1) {
+                currentWizardStep++;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                if (currentWizardStep === totalSteps - 1) {
+                    nextBtn.innerHTML = 'Review & Submit<i class="material-icons right">check</i>';
+                }
+            }
+        }
+
+        function previousStep() {
+            if (currentWizardStep > 0) {
+                currentWizardStep--;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                nextBtn.innerHTML = 'Next<i class="material-icons right">arrow_forward</i>';
+            }
+        }
+
+        function goToStep(stepIndex) {
+            // Only allow going to completed steps or the current step
+            const canNavigate = stepIndex <= currentWizardStep || isStepCompleted(stepIndex);
+            
+            if (canNavigate) {
+                currentWizardStep = stepIndex;
+                renderTestContent();
+            } else {
+                M.toast({html: 'Please complete previous steps first.', classes: 'orange'});
+            }
+        }
+
+        function isStepCompleted(stepIndex) {
+            if (stepIndex === 0) {
+                return testResults.technicians.length > 0 || testResults.contractors.length > 0;
+            }
+            
+            const totalSteps = currentTest.steps.length + 2;
+            if (stepIndex < totalSteps - 1) {
+                const step = currentTest.steps[stepIndex - 1];
+                const stepData = testResults.steps[step.stepNumber];
+                return stepData && stepData.result && stepData.performer;
+            }
+            
+            return false;
+        }
+
+        function updateWizardSummary() {
+            const summaryEl = document.getElementById('wizardSummary');
+            if (!summaryEl) return;
+            
+            const passedSteps = Object.values(testResults.steps).filter(s => s.result === 'pass').length;
+            const failedSteps = Object.values(testResults.steps).filter(s => s.result === 'fail').length;
+            const totalSteps = currentTest.steps.length;
+            
+            summaryEl.innerHTML = `
+                <div class="row">
+                    <div class="col s12">
+                        <p><strong>Asset:</strong> ${currentAsset.name}</p>
+                        <p><strong>Procedure:</strong> ${currentTest.name}</p>
+                        <p><strong>Date:</strong> ${testResults.date}</p>
+                        <p><strong>Personnel:</strong></p>
+                        <ul>
+                            ${testResults.technicians.map(t => `<li>Technician: ${t}</li>`).join('')}
+                            ${testResults.contractors.map(c => `<li>Contractor: ${c}</li>`).join('')}
+                        </ul>
+                        
+                        <h6>Test Results</h6>
+                        <p><strong>Passed:</strong> ${passedSteps} steps</p>
+                        <p><strong>Failed:</strong> ${failedSteps} steps</p>
+                        
+                        ${failedSteps > 0 ? `
+                            <div class="card-panel amber lighten-4" style="margin-top: 20px;">
+                                <i class="material-icons left">warning</i>
+                                <span>This test has failed steps. Please review and take necessary actions.</span>
+                            </div>
+                        ` : `
+                            <div class="card-panel green lighten-4" style="margin-top: 20px;">
+                                <i class="material-icons left">check_circle</i>
+                                <span>All test steps passed successfully!</span>
+                            </div>
+                        `}
+                        
+                        ${testResults.notes ? `
+                            <div style="margin-top: 20px;">
+                                <h6>Notes</h6>
+                                <p>${testResults.notes}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function restoreStepValues() {
+            // Restore personnel values
+            for (let i = 1; i <= 3; i++) {
+                const techEl = document.getElementById(`technician${i}`);
+                const contEl = document.getElementById(`contractor${i}`);
+                
+                if (techEl && testResults.technicians[i-1]) {
+                    techEl.value = testResults.technicians[i-1];
+                    M.updateTextFields();
+                }
+                
+                if (contEl && testResults.contractors[i-1]) {
+                    contEl.value = testResults.contractors[i-1];
+                    M.updateTextFields();
+                }
+            }
+            
+            // Restore step values if we're on a step
+            if (currentWizardStep > 0 && currentWizardStep <= currentTest.steps.length) {
+                const step = currentTest.steps[currentWizardStep - 1];
+                const stepData = testResults.steps[step.stepNumber];
+                
+                if (stepData) {
+                    // Restore result
+                    if (stepData.result) {
+                        const radio = document.querySelector(`input[name="step-${step.stepNumber}-result"][value="${stepData.result}"]`);
+                        if (radio) radio.checked = true;
                     }
-                });
+                    
+                    // Restore performer
+                    const performerSelect = document.getElementById(`step-${step.stepNumber}-performer`);
+                    if (performerSelect && stepData.performer) {
+                        performerSelect.value = stepData.performer;
+                        M.FormSelect.init(performerSelect);
+                    }
+                    
+                    // Restore notes
+                    const notesEl = document.getElementById(`step-${step.stepNumber}-notes`);
+                    if (notesEl && stepData.notes) {
+                        notesEl.value = stepData.notes;
+                        M.textareaAutoResize(notesEl);
+                        M.updateTextFields();
+                    }
+                    
+                    // Show timestamp
+                    if (stepData.performedAt) {
+                        const timestampEl = document.getElementById(`step-${step.stepNumber}-timestamp`);
+                        if (timestampEl) {
+                            timestampEl.textContent = `Performed at: ${stepData.performedAt}`;
+                        }
+                    }
+                }
+            }
+            
+            // Restore overall notes if on summary
+            const overallNotesEl = document.getElementById('overallNotes');
+            if (overallNotesEl && testResults.notes) {
+                overallNotesEl.value = testResults.notes;
+                M.textareaAutoResize(overallNotesEl);
                 M.updateTextFields();
-                M.FormSelect.init(document.querySelectorAll('select'));
-            }, 100);
+            }
+        }
+
+        function restoreAllStepValues() {
+            // Restore all step data for classic mode
+            currentTest.steps.forEach(step => {
+                const stepData = testResults.steps[step.stepNumber];
+                
+                if (stepData) {
+                    // Restore result
+                    if (stepData.result) {
+                        const radio = document.querySelector(`input[name="step-${step.stepNumber}-result"][value="${stepData.result}"]`);
+                        if (radio) radio.checked = true;
+                    }
+                    
+                    // Restore performer
+                    const performerSelect = document.getElementById(`step-${step.stepNumber}-performer`);
+                    if (performerSelect && stepData.performer) {
+                        setTimeout(() => {
+                            performerSelect.value = stepData.performer;
+                            M.FormSelect.init(performerSelect);
+                        }, 200);
+                    }
+                    
+                    // Show timestamp
+                    if (stepData.performedAt) {
+                        const timestampEl = document.getElementById(`step-${step.stepNumber}-timestamp`);
+                        if (timestampEl) {
+                            timestampEl.textContent = `Performed at: ${stepData.performedAt}`;
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePersonnelDropdowns() {
+            const allPersonnel = [...testResults.technicians.map(t => `Technician: ${t}`), 
+                                 ...testResults.contractors.map(c => `Contractor: ${c}`)];
+            
+            // Update dropdowns for current step in wizard mode or all steps in classic mode
+            const stepsToUpdate = wizardMode && currentWizardStep > 0 && currentWizardStep <= currentTest.steps.length 
+                ? [currentTest.steps[currentWizardStep - 1]]
+                : currentTest.steps;
+            
+            stepsToUpdate.forEach(step => {
+                const select = document.getElementById(`step-${step.stepNumber}-performer`);
+                if (select) {
+                    const currentValue = testResults.steps[step.stepNumber]?.performer || '';
+                    
+                    select.innerHTML = '<option value="">Select who performed this step</option>';
+                    
+                    allPersonnel.forEach(person => {
+                        const option = document.createElement('option');
+                        option.value = person;
+                        option.textContent = person;
+                        if (person === currentValue) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    
+                    select.disabled = allPersonnel.length === 0;
+                    M.FormSelect.init(select);
+                }
+            });
+        }
+
+        function initializeMaterializeComponents() {
+            // Fix for textareaAutoResize error
+            const textareas = document.querySelectorAll('.materialize-textarea');
+            textareas.forEach(textarea => {
+                try {
+                    M.textareaAutoResize(textarea);
+                } catch (e) {
+                    // Fallback if textareaAutoResize fails
+                    textarea.style.height = 'auto';
+                    textarea.style.overflow = 'hidden';
+                }
+            });
+            M.updateTextFields();
+            M.FormSelect.init(document.querySelectorAll('select'));
+        }
+
+        function showImage(imageUrl) {
+            document.getElementById('previewImage').src = imageUrl;
+            currentImageZoom = 1;
+            resetZoom();
+            const modal = M.Modal.getInstance(document.getElementById('imageModal'));
+            modal.open();
+        }
+
+        function zoomImage(delta) {
+            currentImageZoom = Math.max(0.5, Math.min(3, currentImageZoom + delta));
+            const img = document.getElementById('previewImage');
+            img.style.transform = `scale(${currentImageZoom})`;
+        }
+
+        function resetZoom() {
+            currentImageZoom = 1;
+            const img = document.getElementById('previewImage');
+            img.style.transform = 'scale(1)';
+            img.style.transition = 'transform 0.3s ease';
+        }
+
+        // Add missing functions
+        function updatePersonnel() {
+            // Collect technicians
+            const technicians = [];
+            for (let i = 1; i <= 3; i++) {
+                const techEl = document.getElementById(`technician${i}`);
+                if (techEl && techEl.value.trim()) {
+                    technicians.push(techEl.value.trim());
+                }
+            }
+            
+            // Collect contractors
+            const contractors = [];
+            for (let i = 1; i <= 3; i++) {
+                const contEl = document.getElementById(`contractor${i}`);
+                if (contEl && contEl.value.trim()) {
+                    contractors.push(contEl.value.trim());
+                }
+            }
+            
+            // Update test results
+            testResults.technicians = technicians;
+            testResults.contractors = contractors;
+            
+            // Update dropdowns if not in wizard mode or past personnel step
+            if (!wizardMode || currentWizardStep > 0) {
+                updatePersonnelDropdowns();
+            }
+            
+            // Auto-save after updating personnel
+            saveTestProgress();
+        }
+        
+        function updateStepResult(stepNumber, result) {
+            if (!testResults.steps[stepNumber]) {
+                testResults.steps[stepNumber] = {};
+            }
+            testResults.steps[stepNumber].result = result;
+            
+            // Update visual indicator in wizard mode
+            if (wizardMode) {
+                renderTestContent();
+            } else {
+                // Update the step's visual state
+                const stepEl = document.getElementById(`step-${stepNumber}`);
+                if (stepEl) {
+                    stepEl.classList.remove('completed', 'failed');
+                    if (result === 'pass') {
+                        stepEl.classList.add('completed');
+                    } else if (result === 'fail') {
+                        stepEl.classList.add('failed');
+                    }
+                }
+            }
+            
+            // Auto-save after updating step result
+            saveTestProgress();
+        }
+        
+        function updateStepPerformer(stepNumber, performer) {
+            if (!testResults.steps[stepNumber]) {
+                testResults.steps[stepNumber] = {};
+            }
+            testResults.steps[stepNumber].performer = performer;
+            
+            // Add timestamp
+            if (performer) {
+                const now = new Date();
+                testResults.steps[stepNumber].performedAt = now.toLocaleTimeString();
+                
+                // Update timestamp display
+                const timestampEl = document.getElementById(`step-${stepNumber}-timestamp`);
+                if (timestampEl) {
+                    timestampEl.textContent = `Performed at: ${testResults.steps[stepNumber].performedAt}`;
+                }
+            }
+            
+            // Auto-save after updating performer
+            saveTestProgress();
+        }
+        
+        function updateStepNotes(stepNumber, notes) {
+            if (!testResults.steps[stepNumber]) {
+                testResults.steps[stepNumber] = {};
+            }
+            testResults.steps[stepNumber].notes = notes;
+            
+            // Auto-save after updating notes
+            saveTestProgress();
+        }
+        
+        function nextStep() {
+            const totalSteps = currentTest.steps.length + 2;
+            
+            if (!validateCurrentStep()) {
+                M.toast({html: 'Please complete the current step before proceeding.', classes: 'orange'});
+                return;
+            }
+            
+            if (currentWizardStep < totalSteps - 1) {
+                currentWizardStep++;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                if (currentWizardStep === totalSteps - 1) {
+                    nextBtn.innerHTML = 'Review & Submit<i class="material-icons right">check</i>';
+                }
+            }
+            
+            // Auto-save after moving to next step
+            saveTestProgress();
+        }
+        
+        function previousStep() {
+            if (currentWizardStep > 0) {
+                currentWizardStep--;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                nextBtn.innerHTML = 'Next<i class="material-icons right">arrow_forward</i>';
+            }
+            
+            // Auto-save after moving to previous step
+            saveTestProgress();
+        }
+        
+        function startTest(procedureId) {
+            console.log('Starting test:', procedureId);
+            
+            currentTest = testProcedures.find(p => p.id === procedureId);
+            if (!currentTest) {
+                console.error('Test procedure not found:', procedureId);
+                M.toast({html: 'Error: Test procedure not found'});
+                return;
+            }
+            
+            // Check for saved progress
+            const progressLoaded = loadTestProgress();
+            
+            if (!progressLoaded) {
+                // Initialize test results with personnel arrays
+                testResults = {
+                    assetId: currentAsset.id,
+                    procedureId: currentTest.id,
+                    date: new Date().toLocaleDateString('en-GB'),
+                    technicians: [],
+                    contractors: [],
+                    steps: {},
+                    notes: '',
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Reset wizard step
+                currentWizardStep = 0;
+            }
+            
+            // Update modal content
+            document.getElementById('testProcedureName').textContent = currentTest.name;
+            
+            // Setup wizard mode toggle
+            const wizardToggle = document.getElementById('wizardModeToggle');
+            wizardToggle.checked = wizardMode;
+            wizardToggle.addEventListener('change', function() {
+                wizardMode = this.checked;
+                renderTestContent();
+            });
+            
+            renderTestContent();
             
             // Close asset modal
             const assetModal = M.Modal.getInstance(document.getElementById('assetModal'));
@@ -1988,386 +2828,223 @@
             }, 300);
         }
 
-        async function submitTestResults() {
-            // Validate at least one technician or contractor
-            if (testResults.technicians.length === 0 && testResults.contractors.length === 0) {
-                M.toast({html: 'Please enter at least one technician or contractor!', classes: 'red'});
-                return;
-            }
+        // Add auto-save functionality
+        function saveTestProgress() {
+            if (!currentTest || !currentAsset) return;
             
-            // Debug: Log the current state
-            console.log('Test Results before validation:', testResults);
-            console.log('Current Test Steps:', currentTest.steps);
-            
-            // Check if all steps have results and performers
-            let missingSteps = [];
-            let allStepsCompleted = true;
-            
-            currentTest.steps.forEach(step => {
-                const stepData = testResults.steps[step.stepNumber];
-                console.log(`Step ${step.stepNumber} data:`, stepData);
-                
-                if (!stepData || !stepData.result) {
-                    missingSteps.push(`Step ${step.stepNumber}: Missing result (pass/fail)`);
-                    allStepsCompleted = false;
-                } else if (!stepData.performer || stepData.performer === '') {
-                    missingSteps.push(`Step ${step.stepNumber}: Missing performer selection`);
-                    allStepsCompleted = false;
-                }
-            });
-            
-            if (!allStepsCompleted) {
-                console.log('Missing steps:', missingSteps);
-                M.toast({
-                    html: `Please complete all test steps!<br>${missingSteps.join('<br>')}`, 
-                    classes: 'orange',
-                    displayLength: 6000
-                });
-                return;
-            }
-            
-            // Calculate overall status
-            const failedSteps = Object.values(testResults.steps).filter(step => step.result === 'fail').length;
-            testResults.overallStatus = failedSteps === 0 ? 'passed' : 'failed';
-            
-            // Check if user is signed in
-            if (gapi.client.getToken() !== null) {
-                // Write to Google Sheets
-                await writeTestResultsToSheet();
-            } else {
-                // Store locally if not signed in
-                const localResults = JSON.parse(localStorage.getItem('testResults') || '[]');
-                localResults.push(testResults);
-                localStorage.setItem('testResults', JSON.stringify(localResults));
-                
-                M.toast({html: 'Test results saved locally. Sign in to save to Google Sheets.', classes: 'orange'});
-            }
-            
-            // Add to our in-memory array
-            testResultsHistory.push({
-                assetId: testResults.assetId,
-                procedureId: testResults.procedureId,
-                date: testResults.date,
-                technicians: testResults.technicians.join(', '),
-                contractors: testResults.contractors.join(', '),
-                stepResults: JSON.stringify(testResults.steps),
-                overallStatus: testResults.overallStatus,
-                notes: testResults.notes,
-                timestamp: testResults.timestamp
-            });
-            
-            console.log('Test Results:', testResults);
-            
-            // Close test modal
-            const testModal = M.Modal.getInstance(document.getElementById('testModal'));
-            testModal.close();
-            
-            // Show results summary
-            showResultsSummary();
-        }
-
-        // Modified function to write test results with expanded format including performer info
-        async function writeTestResultsToSheet() {
-            // Prepare rows for each step result
-            const rows = [];
-            const timestamp = new Date().toLocaleString('en-GB');
-
-            const techniciansList = testResults.technicians.join(', ');
-            const contractorsList = testResults.contractors.join(', ');
-            
-            // Add a row for each test step
-            currentTest.steps.forEach(step => {
-                const stepResult = testResults.steps[step.stepNumber] || {};
-                rows.push([
-                    testResults.assetId,
-                    currentAsset.name,
-                    currentAsset.type,
-                    testResults.procedureId,
-                    currentTest.name,
-                    testResults.date,
-                    timestamp,
-                    techniciansList,
-                    contractorsList,
-                    step.stepNumber,
-                    step.description,
-                    stepResult.result || 'not completed',
-                    stepResult.performer || '',
-                    stepResult.performedAt || '',
-                    stepResult.notes || '',
-                    testResults.overallStatus,
-                    testResults.notes || ''
-                ]);
-            });
-            
-            const body = {
-                values: rows
+            const progressKey = `testProgress_${currentAsset.id}_${currentTest.id}`;
+            const progressData = {
+                testResults: testResults,
+                currentWizardStep: currentWizardStep,
+                wizardMode: wizardMode,
+                savedAt: new Date().toISOString(),
+                assetName: currentAsset.name,
+                procedureName: currentTest.name
             };
             
+            localStorage.setItem(progressKey, JSON.stringify(progressData));
+            console.log('Test progress saved');
+        }
+        
+        function loadTestProgress() {
+            if (!currentTest || !currentAsset) return false;
+            
+            const progressKey = `testProgress_${currentAsset.id}_${currentTest.id}`;
+            const savedProgress = localStorage.getItem(progressKey);
+            
+            if (!savedProgress) return false;
+            
             try {
-                const response = await gapi.client.sheets.spreadsheets.values.append({
-                    spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
-                    range: `${GOOGLE_CONFIG.SHEETS.TEST_RESULTS}!A:Q`,
-                    valueInputOption: 'USER_ENTERED',
-                    resource: body
-                });
+                const progressData = JSON.parse(savedProgress);
                 
-                console.log('Test results written to sheet:', response);
-                M.toast({html: 'Test results saved to Google Sheets!', classes: 'green'});
+                // Check if saved progress is less than 24 hours old
+                const savedTime = new Date(progressData.savedAt);
+                const hoursSinceSave = (new Date() - savedTime) / (1000 * 60 * 60);
                 
-                // Also update the asset's status if the test failed
-                if (testResults.overallStatus === 'failed') {
-                    await updateAssetStatus('fault/shutdown');
+                if (hoursSinceSave > 24) {
+                    // Progress too old, clear it
+                    localStorage.removeItem(progressKey);
+                    return false;
                 }
                 
-                // Reload data to show the new test result
-                await loadTestResults();
+                // Ask user if they want to resume
+                const resume = confirm(`Found saved progress for "${progressData.procedureName}" test on ${progressData.assetName}.\n\nWould you like to resume where you left off?`);
                 
-            } catch (error) {
-                console.error('Error writing to sheet:', error);
-                M.toast({html: 'Error saving to Google Sheets. Results saved locally.', classes: 'red'});
-                
-                // Save locally as backup
-                const localResults = JSON.parse(localStorage.getItem('testResults') || '[]');
-                localResults.push(testResults);
-                localStorage.setItem('testResults', JSON.stringify(localResults));
-            }
-        }
-
-        function showResultsSummary() {
-            const summaryContent = document.getElementById('resultsSummary');
-            
-            const passedSteps = Object.values(testResults.steps).filter(step => step.result === 'pass').length;
-            const failedSteps = Object.values(testResults.steps).filter(step => step.result === 'fail').length;
-            const totalSteps = Object.keys(testResults.steps).length;
-            
-            const isSignedIn = gapi.client.getToken() !== null;
-            
-            summaryContent.innerHTML = `
-                <div class="test-results-display">
-                    <h5>Test Completed</h5>
-                    <p><strong>Asset:</strong> ${currentAsset.name}</p>
-                    <p><strong>Procedure:</strong> ${currentTest.name}</p>
-                    <p><strong>Technicians:</strong> ${testResults.technicians.join(', ') || 'None'}</p>
-                    <p><strong>Contractors:</strong> ${testResults.contractors.join(', ') || 'None'}</p>
-                    <p><strong>Date:</strong> ${testResults.date}</p>
+                if (resume) {
+                    testResults = progressData.testResults;
+                    currentWizardStep = progressData.currentWizardStep;
+                    wizardMode = progressData.wizardMode;
                     
-                    <h6>Results Summary</h6>
-                    <div class="test-result-item ${testResults.overallStatus === 'passed' ? 'test-result-passed' : 'test-result-failed'}">
-                        <strong>Overall Status:</strong> ${testResults.overallStatus.toUpperCase()}
-                    </div>
-                    
-                    <p><strong>Steps Passed:</strong> ${passedSteps}/${totalSteps}</p>
-                    <p><strong>Steps Failed:</strong> ${failedSteps}/${totalSteps}</p>
-                    
-                    ${failedSteps > 0 ? `
-                        <h6>Failed Steps</h6>
-                        ${Object.entries(testResults.steps)
-                            .filter(([_, step]) => step.result === 'fail')
-                            .map(([stepNum, step]) => {
-                                const stepInfo = currentTest.steps.find(s => s.stepNumber === parseInt(stepNum));
-                                return `
-                                    <div class="test-result-item test-result-failed">
-                                        <strong>Step ${stepNum}:</strong> ${stepInfo ? stepInfo.description : 'Unknown step'}
-                                        <br><small>Performed by: ${step.performer} at ${step.performedAt}</small>
-                                        ${step.notes ? `<br>Notes: ${step.notes}` : ''}
-                                    </div>
-                                `;
-                            }).join('')}
-
-                    ` : ''}
-                    
-                    ${testResults.notes ? `
-                        <h6>Overall Notes</h6>
-                        <p>${testResults.notes}</p>
-                    ` : ''}
-                    
-                    ${isSignedIn ? `
-                        <div class="card-panel green lighten-4">
-                            <i class="material-icons tiny">check_circle</i> Test results have been saved to Google Sheets.
-                        </div>
-                    ` : `
-                        <div class="card-panel amber lighten-4">
-                            <i class="material-icons tiny">info</i> Test results saved locally. Sign in to Google Sheets.
-                        </div>
-                        <button class="btn waves-effect waves-light" onclick="exportTestResults()">
-                            <i class="material-icons left">download</i>Export Results
-                        </button>
-                    `}
-                </div>
-            `;
-            
-            const resultsModal = M.Modal.getInstance(document.getElementById('resultsModal'));
-            resultsModal.open();
-            
-            // Show success toast
-            M.toast({html: `Test completed: ${testResults.overallStatus.toUpperCase()}`, classes: testResults.overallStatus === 'passed' ? 'green' : 'red'});
-            
-            // If test failed, reload assets to show updated status
-            if (testResults.overallStatus === 'failed' && isSignedIn) {
-                setTimeout(() => {
-                    loadAssets().then(() => filterAssets());
-                }, 1000);
-            }
-        }
-
-        async function uploadLocalResults() {
-            const localResults = JSON.parse(localStorage.getItem('testResults') || '[]');
-            if (localResults.length === 0) return;
-            
-            M.toast({html: `Uploading ${localResults.length} local test results...`});
-            
-            for (const result of localResults) {
-                // Get the test procedure details
-                const testProc = testProcedures.find(p => p.id === result.procedureId);
-                const asset = allAssets.find(a => a.id === result.assetId);
-                
-                if (testProc && asset) {
-                    const rows = [];
-                    const timestamp = result.timestamp || new Date().toLocaleString('en-GB');
-                    const techniciansList = (result.technicians || []).join(', ');
-                    const contractorsList = (result.contractors || []).join(', ');
-                    
-                    testProc.steps.forEach(step => {
-                        const stepResult = result.steps[step.stepNumber] || {};
-                        rows.push([
-                            result.assetId,
-                            asset.name,
-                            asset.type,
-                            result.procedureId,
-                            testProc.name,
-                            result.date,
-                            timestamp,
-                            techniciansList,
-                            contractorsList,
-                            step.stepNumber,
-                            step.description,
-                            stepResult.result || 'not completed',
-                            stepResult.performer || '',
-                            stepResult.performedAt || '',
-                            stepResult.notes || '',
-                            result.overallStatus,
-                            result.notes || ''
-                        ]);
-                    });
-                    
-                    try {
-                        await gapi.client.sheets.spreadsheets.values.append({
-                            spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
-                            range: `${GOOGLE_CONFIG.SHEETS.TEST_RESULTS}!A:Q`,
-                            valueInputOption: 'USER_ENTERED',
-                            resource: { values: rows }
-                        });
-                    } catch (error) {
-                        console.error('Error uploading local result:', error);
+                    // Update wizard toggle
+                    const wizardToggle = document.getElementById('wizardModeToggle');
+                    if (wizardToggle) {
+                        wizardToggle.checked = wizardMode;
                     }
+                    
+                    return true;
+                } else {
+                    // User chose not to resume, clear saved progress
+                    localStorage.removeItem(progressKey);
+                }
+            } catch (error) {
+                console.error('Error loading saved progress:', error);
+                localStorage.removeItem(progressKey);
+            }
+            
+            return false;
+        }
+        
+        function clearTestProgress() {
+            if (!currentTest || !currentAsset) return;
+            
+            const progressKey = `testProgress_${currentAsset.id}_${currentTest.id}`;
+            localStorage.removeItem(progressKey);
+        }
+        
+        // Modify existing functions to include auto-save
+        function updatePersonnel() {
+            // Collect technicians
+            const technicians = [];
+            for (let i = 1; i <= 3; i++) {
+                const techEl = document.getElementById(`technician${i}`);
+                if (techEl && techEl.value.trim()) {
+                    technicians.push(techEl.value.trim());
                 }
             }
             
-            // Clear local storage after successful upload
-            localStorage.removeItem('testResults');
-            M.toast({html: 'Local results uploaded successfully!', classes: 'green'});
-            
-            // Reload test results
-            await loadTestResults();
-        }
-
-        function updatePersonnel() {
-            // Collect all technicians and contractors
-            const technicians = [];
+            // Collect contractors
             const contractors = [];
-            
             for (let i = 1; i <= 3; i++) {
-                const tech = document.getElementById(`technician${i}`).value.trim();
-                if (tech) technicians.push(tech);
-                
-                const cont = document.getElementById(`contractor${i}`).value.trim();
-                if (cont) contractors.push(cont);
+                const contEl = document.getElementById(`contractor${i}`);
+                if (contEl && contEl.value.trim()) {
+                    contractors.push(contEl.value.trim());
+                }
             }
             
+            // Update test results
             testResults.technicians = technicians;
             testResults.contractors = contractors;
             
-            // Update all performer dropdowns
-            const allPersonnel = [...technicians.map(t => `Technician: ${t}`), ...contractors.map(c => `Contractor: ${c}`)];
-            
-            currentTest.steps.forEach(step => {
-                const select = document.getElementById(`step-${step.stepNumber}-performer`);
-                if (select) {
-                    // Store the current value before updating
-                    const currentValue = select.value;
-                    
-                    // Destroy the existing Materialize instance
-                    const instance = M.FormSelect.getInstance(select);
-                    if (instance) {
-                        instance.destroy();
-                    }
-                    
-                    // Update the options
-                    select.innerHTML = '<option value="" disabled selected>Select who performed this step</option>';
-                    
-                    allPersonnel.forEach(person => {
-                        const option = document.createElement('option');
-                        option.value = person;
-                        option.textContent = person;
-                        select.appendChild(option);
-                    });
-                    
-                    // Enable/disable based on whether there are personnel
-                    select.disabled = allPersonnel.length === 0;
-                    
-                    // Restore previous selection if it still exists
-                    if (currentValue && allPersonnel.includes(currentValue)) {
-                        select.value = currentValue;
-                    }
-                    
-                    // Re-initialize the Materialize select
-                    M.FormSelect.init(select);
-                }
-            });
-            
-            // Show a toast if personnel were added
-            if (allPersonnel.length > 0) {
-                M.toast({html: `${allPersonnel.length} personnel available for selection`, classes: 'blue'});
+            // Update dropdowns if not in wizard mode or past personnel step
+            if (!wizardMode || currentWizardStep > 0) {
+                updatePersonnelDropdowns();
             }
+            
+            // Auto-save after updating personnel
+            saveTestProgress();
         }
-
-        function updateStepPerformer(stepNumber, performer) {
-            if (!testResults.steps[stepNumber]) {
-                testResults.steps[stepNumber] = {};
-            }
-            testResults.steps[stepNumber].performer = performer;
-            testResults.steps[stepNumber].performedAt = new Date().toLocaleString('en-GB');
-            
-            // Update timestamp display
-            const timestampEl = document.getElementById(`step-${stepNumber}-timestamp`);
-            if (timestampEl && performer) {
-                timestampEl.textContent = `Performed at: ${testResults.steps[stepNumber].performedAt}`;
-            }
-        }
-
+        
         function updateStepResult(stepNumber, result) {
-            console.log('Updating step result:', stepNumber, result);
-            
             if (!testResults.steps[stepNumber]) {
                 testResults.steps[stepNumber] = {};
             }
             testResults.steps[stepNumber].result = result;
             
-            const stepElement = document.getElementById(`step-${stepNumber}`);
-            stepElement.classList.remove('completed', 'failed');
-            if (result === 'pass') {
-                stepElement.classList.add('completed');
-            } else if (result === 'fail') {
-                stepElement.classList.add('failed');
+            // Update visual indicator in wizard mode
+            if (wizardMode) {
+                renderTestContent();
+            } else {
+                // Update the step's visual state
+                const stepEl = document.getElementById(`step-${stepNumber}`);
+                if (stepEl) {
+                    stepEl.classList.remove('completed', 'failed');
+                    if (result === 'pass') {
+                        stepEl.classList.add('completed');
+                    } else if (result === 'fail') {
+                        stepEl.classList.add('failed');
+                    }
+                }
             }
+            
+            // Auto-save after updating step result
+            saveTestProgress();
         }
-
+        
+        function updateStepPerformer(stepNumber, performer) {
+            if (!testResults.steps[stepNumber]) {
+                testResults.steps[stepNumber] = {};
+            }
+            testResults.steps[stepNumber].performer = performer;
+            
+            // Add timestamp
+            if (performer) {
+                const now = new Date();
+                testResults.steps[stepNumber].performedAt = now.toLocaleTimeString();
+                
+                // Update timestamp display
+                const timestampEl = document.getElementById(`step-${stepNumber}-timestamp`);
+                if (timestampEl) {
+                    timestampEl.textContent = `Performed at: ${testResults.steps[stepNumber].performedAt}`;
+                }
+            }
+            
+            // Auto-save after updating performer
+            saveTestProgress();
+        }
+        
         function updateStepNotes(stepNumber, notes) {
             if (!testResults.steps[stepNumber]) {
                 testResults.steps[stepNumber] = {};
             }
             testResults.steps[stepNumber].notes = notes;
+            
+            // Auto-save after updating notes
+            saveTestProgress();
         }
+        
+        function nextStep() {
+            const totalSteps = currentTest.steps.length + 2;
+            
+            if (!validateCurrentStep()) {
+                M.toast({html: 'Please complete the current step before proceeding.', classes: 'orange'});
+                return;
+            }
+            
+            if (currentWizardStep < totalSteps - 1) {
+                currentWizardStep++;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                if (currentWizardStep === totalSteps - 1) {
+                    nextBtn.innerHTML = 'Review & Submit<i class="material-icons right">check</i>';
+                }
+            }
+            
+            // Auto-save after moving to next step
+            saveTestProgress();
+        }
+        
+        function previousStep() {
+            if (currentWizardStep > 0) {
+                currentWizardStep--;
+                renderTestContent();
+                
+                // Update button text
+                const nextBtn = document.getElementById('nextStepBtn');
+                nextBtn.innerHTML = 'Next<i class="material-icons right">arrow_forward</i>';
+            }
+            
+            // Auto-save after moving to previous step
+            saveTestProgress();
+        }
+        
+        // Add cleanup for when test modal is closed without submission
+        document.addEventListener('DOMContentLoaded', function() {
+            // ...existing code...
+            
+            // Add modal close event listener
+            const testModal = document.getElementById('testModal');
+            const testModalInstance = M.Modal.init(testModal, {
+                onCloseEnd: function() {
+                    // Save progress when modal is closed
+                    if (currentTest && currentAsset && testResults.steps && Object.keys(testResults.steps).length > 0) {
+                        saveTestProgress();
+                        M.toast({html: 'Test progress saved. You can resume later.', classes: 'blue'});
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>
